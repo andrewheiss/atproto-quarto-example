@@ -218,7 +218,7 @@ The link tags injected in step 4 are what signal to Bluesky and other clients to
 
 You can check if the ATProto record and the URL are valid here:
 
-- <https://pdsls.dev/>: This checks if the `at:://` record is valid ([like this!](https://pdsls.dev/at://did:plc:2zcfjzyocp6kapg6jc4eacok/site.standard.document/3mpk4fublj32b))
+- <https://pdsls.dev/>: This checks if the `at://` record is valid ([like this!](https://pdsls.dev/at://did:plc:2zcfjzyocp6kapg6jc4eacok/site.standard.document/3mpk4fublj32b))
 - <https://site-validator.fly.dev/>: This checks if the URL is valid
 
 ## Setting up a new site (not just cloning this example)
