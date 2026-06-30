@@ -1,0 +1,7 @@
+_site/
+_freeze/
+.posit/
+/.quarto/
+**/*.quarto_ipynb
+
+.sequoia-state.json

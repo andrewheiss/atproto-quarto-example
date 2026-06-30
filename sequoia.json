@@ -1,0 +1,24 @@
+{
+  "$schema": "https://tangled.org/stevedylan.dev/sequoia/raw/main/sequoia.schema.json",
+  "siteUrl": "https://andrewheiss-atproto-and-quarto.share.connect.posit.cloud",
+  "contentDir": "./posts",
+  "publicDir": ".",
+  "outputDir": "./_site",
+  "publicationUri": "at://did:plc:2zcfjzyocp6kapg6jc4eacok/site.standard.publication/3mpjsxugtm72m",
+  "pdsUrl": "https://morel.us-east.host.bsky.network",
+  "frontmatter": {
+    "publishDate": "date",
+    "coverImage": "atproto_image",
+    "tags": "categories"
+  },
+  "publishContent": true,
+  "removeIndexFromSlug": true,
+  "autoSync": true,
+  "pathTemplate": "/posts/{slug}/",
+  "ignore": [
+    "**/_*.qmd",
+    "**/_*.md",
+    "_site/**",
+    "_freeze/**"
+  ]
+}

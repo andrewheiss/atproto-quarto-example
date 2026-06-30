@@ -1,0 +1,249 @@
+# ATProto + Quarto: Working Example
+
+This is a minimal working example of publishing a [Quarto](https://quarto.org) website blog to ATProto as [`site.standard.document`](https://standard.site) records, enabling rich preview cards on Bluesky and other ATProto clients.
+
+It's meant to be a reference for others to figure out how to do this themselves. Maybe someday it'll be easier, but for now, you have to do this slightly convoluted process
+
+## Prerequisites
+
+### 1. A fork of `sequoia-cli`
+
+[Sequoia](https://sequoia.pub) is the CLI tool that handles publishing records to ATProto PDS serverse. The published npm package (`sequoia-cli`) does not yet support `.qmd` files. I have a pull request that adds that support in [PR #88](https://tangled.org/stevedylan.dev/sequoia/pulls/88), but until (if) merges, you need to build a custom version of Sequoia from a fork.
+
+You'll also need [Bun](https://bun.sh), which sequoia uses as its build tool:
+
+```bash
+brew install bun  # or see https://bun.sh for other platforms
+```
+
+Then clone, build, and link the fork:
+
+```bash
+git clone https://tangled.org/andrew.heiss.phd/sequoia
+cd sequoia
+bun install
+cd packages/cli
+bun run build
+npm link
+```
+
+Confirm it's active:
+
+```bash
+readlink -f $(which sequoia)
+# should print a path inside the cloned sequoia repo
+```
+
+To switch back to the official published version later:
+
+```bash
+npm install -g sequoia-cli
+```
+
+### 2. Quarto, obviously
+
+[Install Quarto](https://quarto.org/docs/get-started/).
+
+### 3. An ATProto account
+
+You need a Bluesky or other ATProto PDS account. Authenticate sequoia once:
+
+```bash
+sequoia login
+```
+
+This will ask you for an app-specific password. Go make one and paste it in.
+
+## How this example is structured
+
+```
+.
+├── _quarto.yml              # Quarto project config
+├── sequoia.json             # Sequoia config
+├── .well-known/
+│   └── site.standard.publication   # Publication verification file
+├── posts/
+│   ├── _metadata.yml        # Quarto shared metadata (freeze: true, etc.)
+│   ├── post-with-code/
+│   │   ├── index.qmd
+│   │   └── image.jpg
+│   └── welcome/
+│       ├── index.qmd
+│       └── thumbnail.jpg
+└── files/
+    └── quarto.png           # Publication icon (used during sequoia init)
+```
+
+Posts follow Quarto's standard [page bundle](https://quarto.org/docs/websites/website-blog.html) layout: each post lives in its own folder with co-located assets.
+
+I really just made it by running…
+
+```bash
+quarto create project blog
+```
+
+…and then I made some minor edits
+
+## Configuration walkthrough
+
+You need to configure a few things before this can work…
+
+### `sequoia.json`
+
+Run this to start an initial `sequoia.json` file:
+
+```bash
+sequoia init
+```
+
+That init dialog doesn't include all the required options, so you'll need to edit it so that it also includes these things:
+
+```json
+{
+  "contentDir": "./posts",
+  "pathTemplate": "/posts/{slug}/",
+  "removeIndexFromSlug": true,
+  "ignore": ["**/_*.qmd", "**/_*.md", "_site/**", "_freeze/**"],
+  "frontmatter": {
+    "publishDate": "date",
+    "coverImage": "atproto_image",
+    "tags": "categories"
+  }
+}
+```
+
+Here are the important settings there ↑:
+
+- **`contentDir: "./posts"`**: scans only the posts folder, not root-level pages (`index.qmd`, `about.qmd`). Scanning from the site root causes a slug collision between a root `index.qmd` (slug `"index"`) and the `index.html` basename of every bundle-style post, which breaks `sequoia inject`'s matching. Sticking to `./posts` avoids this entirely. This is unfortunate because I'd like to point sequoia at the whole site, but for now, this works.
+
+- **`pathTemplate: "/posts/{slug}/"`**: because `contentDir` is `./posts`, slugs are generated relative to that folder (e.g. `post-with-code`), so they don't carry a `posts/` prefix. The pathTemplate adds it back, and the trailing slash matches how Quarto serves bundle-style posts as directories (`/posts/post-with-code/`). Using `pathPrefix: "/posts"` alone produces URLs without a trailing slash, which won't match the deployed URL.
+
+- **`removeIndexFromSlug: true`**: strips the trailing `/index` from bundle-style post slugs (`post-with-code/index` → `post-with-code`).
+
+- **`ignore` patterns**: `**/_*.qmd` and `**/_*.md` exclude Quarto's underscore-prefixed non-rendered files (like `_metadata.yml` or `_thing.qmd`). `_site/**` and `_freeze/**` prevent sequoia from scanning Quarto's build and freeze-cache output directories.
+
+- **`coverImage: "atproto_image"`**: maps sequoia's cover image to a custom `atproto_image` frontmatter field rather than Quarto's built-in `image:` field. See [Cover images](#cover-images) below for more about why this is necessary.
+
+- **`publishContent: true`**: includes the post body as plain text in the ATProto record's `textContent` field. Set to `false` if you want a pointer-only record (just title, description, URL, and cover image with no mirrored content). Note: if you set this to `false`, sequoia sends `textContent: null` rather than omitting the field, which fails strict lexicon validation. That's probably a bug in sequoia but I don't know how to fix it. 
+
+### `_quarto.yml`
+
+```yaml
+project:
+  type: website
+  resources:
+    - ".well-known/site.standard.publication"
+```
+
+The `resources` entry is required. Quarto's website project does not automatically copy arbitrary root files into `_site/` — only files that are referenced or explicitly listed. Without this, the `.well-known/site.standard.publication` verification file won't appear in your build output, and aggregators won't be able to verify your publication.
+
+Make sure `website.site-url` in `_quarto.yml` matches `siteUrl` in `sequoia.json`. Quarto uses its own value for RSS feeds and OG tags; sequoia uses its own for building `canonicalUrl` in ATProto records. They're read independently and easy to get out of sync.
+
+## Cover images
+
+This is the trickiest part of the Quarto + sequoia integration.
+
+Quarto uses the `image:` frontmatter field for its own listing page cards, Open Graph tags, and Twitter card images. Sequoia also needs a cover image for the ATProto `site.standard.document` record.
+
+Reusing `image:` for both seems natural, but it creates a path resolution conflict: **Quarto resolves `image:` relative to the post's own folder**, while **sequoia resolves it relative to `contentDir`**. So `image: "cover.jpg"` means different things to each tool, and pointing sequoia at the `image:` field breaks one of them.
+
+The easiest solution I've found is to use a separate `atproto_image:` field used only for sequoia:
+
+```yaml
+---
+title: "My Post"
+date: "2026-01-15"
+image: "cover.jpg"                  # Quarto uses this (relative to this post's folder)
+atproto_image: "my-post/cover.jpg"  # sequoia uses this (relative to contentDir ./posts)
+---
+```
+
+The value must be relative to `contentDir` (`./posts`), not to the post's own folder. For a file at `posts/post-with-code/image.jpg`:
+
+```yaml
+atproto_image: "post-with-code/image.jpg"  # correct
+atproto_image: "image.jpg"                 # wrong — resolves to posts/image.jpg (missing)
+```
+
+### What about Quarto's implicit image fallback?
+
+Quarto falls back to the first image in a post's folder when no explicit `image:` is set. 
+
+Alas, sequoia can't do this. It only reads the literal `atproto_image:` frontmatter value from the raw source file, never anything computed during Quarto's render. Posts without an explicit `atproto_image:` field will publish without a cover image on the ATProto record.
+
+
+## ⭐ Actual workflow ⭐
+
+After initial setup, the regular process for writing and publishing looks like:
+
+```bash
+# 0. Write stuff and make edits in Quarto files
+
+# 1. Preview what would be published to the PDS (new posts, changed posts)
+sequoia publish --dry-run
+
+# 2. Publish to ATProto - this writes an `atUri` field in each post's frontmatter
+sequoia publish
+
+# 3. Build the Quarto site
+quarto render
+
+# 4. Inject <link rel="site.standard.document"> tags into the build HTML at _site/
+sequoia inject
+
+# 5. Deploy _site/ to your server
+```
+
+Steps 2 and 4 only run when content changes. `sequoia publish` uses a content hash to detect changes, and `sequoia inject` checks for existing correct link tags and skips files already up to date. *Technically* you could skip `sequoia inject` and instead grab the `atUri` field from the metadata and include it in the HTML `<meta>` section with a template.
+
+The link tags injected in step 4 are what signal to Bluesky and other clients to render a rich standard.site card instead of a plain link preview. Without them, posts show up as plain link previews even if the ATProto records are valid.
+
+### Validation
+
+You can check if the ATProto record and the URL are valid here:
+
+- [https://pdsls.dev/](https://pdsls.dev/): This checks if the `at:://` record is valid ([like this!](https://pdsls.dev/at://did:plc:2zcfjzyocp6kapg6jc4eacok/site.standard.document/3mpk4fublj32b))
+- [https://site-validator.fly.dev/](https://site-validator.fly.dev/): This checks if the URL is valid
+
+
+## Setting up a new site (not just cloning this example)
+
+1. **Run `sequoia init`** from your Quarto project root:
+   - Content directory: `./posts`
+   - Cover images directory: leave blank
+   - Public/static directory: `.` (project root, where `.well-known` lives)
+   - Build output directory: `./_site`
+   - URL path prefix: `/posts` (used during init only—you'll replace this below)
+   - Cover image field: `atproto_image`
+   - Publish date field: `date`
+   - Tags field: `categories`
+
+2. **After `sequoia init`**, manually adjust `sequoia.json`:
+   - Add `"removeIndexFromSlug": true`
+   - Add `"autoSync": true`
+   - Replace `"pathPrefix": "/posts"` with `"pathTemplate": "/posts/{slug}/"`
+   - Add `"ignore": ["**/_*.qmd", "**/_*.md", "_site/**", "_freeze/**"]`
+
+3. **Add the `.well-known` resource** to `_quarto.yml`:
+   ```yaml
+   project:
+     type: website
+     resources:
+       - ".well-known/site.standard.publication"
+   ```
+
+4. **Add `atproto_image:`** to any post where you want a cover image on the ATProto record (see [Cover images](#cover-images) above).
+
+## Main limitations
+
+This system is janky. :(
+
+- **`.qmd` file support requires the fork**: The original upstream `sequoia-cli` only scans for `*.md` and `*.mdx`. The fix is a one-line regex and a single glob pattern addition in `packages/cli/src/lib/markdown.ts`. [PR #88](https://tangled.org/stevedylan.dev/sequoia/pulls/88). Hopefully someday that gets merged in.
+
+- **Per-post-folder cover image resolution doesn't work.**
+
+- **`publishContent: false` sends `textContent: null` instead of omitting the field.**
+
+- **`sequoia inject` can collide on the `"index"` slug.** If `contentDir` is set to `.` (site root) to include non-post pages alongside blog posts, a root `index.qmd` gets slug `"index"`. Inject's Strategy 1 matches on basename, so every bundle-style post's `index.html` matches slug `"index"` and gets the homepage's `atUri` injected instead of the actual page.
+
+- **`sequoia inject` does not verify that an existing link tag has the correct `atUri`.** It only checks whether any `site.standard.document` link tag is present. This means a wrongly-injected tag won't be corrected on a subsequent run.

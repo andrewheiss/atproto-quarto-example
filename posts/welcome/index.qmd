@@ -1,0 +1,16 @@
+---
+title: Welcome To My Blog
+author: Tristan O'Malley
+date: '2026-06-27'
+categories:
+  - news
+image: thumbnail.jpg
+atproto_image: welcome/thumbnail.jpg
+atUri: at://did:plc:2zcfjzyocp6kapg6jc4eacok/site.standard.document/3mpk4fublj32b
+---
+
+This is the first post in a Quarto blog. Welcome!
+
+![](thumbnail.jpg)
+
+Since this post doesn't specify an explicit `image`, the first image in the post will be used in the listing page of posts.

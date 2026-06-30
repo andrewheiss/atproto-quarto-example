@@ -1,0 +1,18 @@
+---
+title: Post With Code
+author: Harlow Malloc
+date: '2026-06-30'
+categories:
+  - news
+  - code
+  - analysis
+image: image.jpg
+atproto_image: post-with-code/image.jpg
+atUri: at://did:plc:2zcfjzyocp6kapg6jc4eacok/site.standard.document/3mpk4frwfzm2p
+---
+
+This is a post with executable code.
+
+```{r}
+plot(penguins$bill_len, penguins$body_mass)
+```
