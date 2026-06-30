@@ -19,6 +19,8 @@
     "**/_*.qmd",
     "**/_*.md",
     "_site/**",
-    "_freeze/**"
+    "_freeze/**",
+    "README.qmd",
+    "README.md"
   ]
 }
